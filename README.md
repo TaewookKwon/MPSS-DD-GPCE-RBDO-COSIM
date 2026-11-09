@@ -1,0 +1,90 @@
+# MPSS-DD-GPCE-RBDO-COSIM
+
+Code and high-fidelity data for the paper
+
+> T. Kwon, S. Hwang, C. Lee, D. Lee, *Reliability-based design optimization of a suspension lower control arm using MBD–FEM co-simulation* (submitted to *Structural and Multidisciplinary Optimization*).
+
+The repository contains the implementation of the multi-point single-step (MPSS) method with dimensionally decomposed generalized polynomial chaos expansion (DD-GPCE) used in the paper, together with the high-fidelity responses obtained during the optimization.
+
+## Overview
+
+The lower control arm (LCA) of a front double-wishbone suspension is designed to minimize its mean mass under geometric and material uncertainties.
+Three reliability constraints are imposed with a target failure probability of $\Phi(-3) \approx 1.35\times10^{-3}$:
+
+| Response | Source | Failure condition |
+| --- | --- | --- |
+| Maximum equivalent plastic strain $\varepsilon_\mathrm{p}$ | Simpack–Abaqus co-simulation of a pothole impact (70 km/h) | $\varepsilon_\mathrm{p} > 0.05$ |
+| $x$-direction stiffness $K_x$ | Static Abaqus analysis | $K_x < 10$ kN/mm |
+| $y$-direction stiffness $K_y$ | Static Abaqus analysis | $K_y < 100$ kN/mm |
+
+The six input random variables follow a multivariate lognormal distribution: four geometric variables (thickness, wishbone section width, ball-joint mounting width, and fillet radius), whose means are the design variables, and the Young's modulus and ultimate tensile strength of the cast A356-T6 alloy.
+
+The MPSS procedure solves a sequence of local RBDO problems.
+In each subregion, local DD-GPCE surrogates ($S=1$, $m=2$, 13 basis functions) are constructed from 26 high-fidelity samples by standard least squares.
+The failure probabilities and their design sensitivities are estimated by Monte Carlo simulation of the surrogates with $10^6$ scrambled Sobol' points, and each local problem is solved by differential evolution (SciPy).
+Candidate designs within a subregion are evaluated by single-pass updates of the surrogate coefficients, without additional high-fidelity analyses.
+See Sections 4 and 5 of the paper for details.
+
+## Repository structure
+
+```
+.
+├── main.py                                  # entry point: problem definition, GPCE settings, MPSS run
+├── globalVars.py                            # control parameters (method, optimizer, MPSS option, restart)
+├── run_opt_mpss.py                          # MPSS loop: subregion sizing, interpolation, local optimization
+├── objective_manager.py                     # DD-GPCE objective (mean mass) and its sensitivity
+├── constraint_manager.py                    # DD-GPCE reliability constraints and their sensitivities
+├── REDLAB_UQ.py                             # DD-GPCE basis construction and whitening transformation
+├── scorefunction_generator_lognormal.py     # score functions of the lognormal inputs
+├── response_dataset_generator_project2.py   # loads stored responses / runs new high-fidelity analyses
+├── sample_generator_project2.ipynb          # generates the 10^6 RQMC input samples
+├── initial/
+│   └── sample_1.csv                         # high-fidelity responses at the initial design
+├── samples/260821_225714/
+│   └── sample_1.csv ... sample_17.csv       # high-fidelity responses of the 17 surrogate constructions
+├── optimization_logs/                       # objective, subregion sizes, and feasibility per MPSS iteration
+├── step_logs/                               # design at which each sample set was generated
+└── verification/
+    ├── project2_DD_GPCE_initial.ipynb         # surrogate verification at the initial design (Section 5.2)
+    └── project2_DD_GPCE_opt_convergence.ipynb # convergence of the response moments with the polynomial order m
+```
+
+## High-fidelity data
+
+Each `sample_*.csv` file contains one row per input sample with four columns: mass $M$ (kg), $\varepsilon_\mathrm{p}$, $K_x$ (kN/mm), and $K_y$ (kN/mm).
+Row $j$ corresponds to the $j$-th row of the input sample file, scaled by the design at which the sample set was generated (`SCALING` option, $X = Z \circ d$).
+
+- `initial/sample_1.csv`: the first 26 rows are the training samples at the initial design $d_0=(36, 36, 70, 5)$ mm, and the remaining rows are the independent samples used for verification (sample 73 is excluded because the analysis failed).
+- `samples/260821_225714/sample_q.csv`: training samples of the $q$-th surrogate construction or reconstruction (17 in total, 442 samples).
+  The corresponding designs are listed in `step_logs/`.
+
+## Requirements
+
+- Python 3.13, NumPy 2.3, SciPy 1.16, pandas, scikit-learn, SymPy, matplotlib
+- seaborn (verification notebooks only)
+
+## Usage
+
+1. Run `sample_generator_project2.ipynb` to generate the $10^6$ input samples (`initial/input_samples_zz.csv`, about 110 MB, seed 123457).
+   This file and the basis matrices (`data/GenMat.pickle`, about 320 MB) are not included because of their size; `GenMat.pickle` is generated by `main.py`.
+2. Set the control parameters in `globalVars.py` and the problem settings in `main.py`.
+3. Run `python main.py`.
+
+With `first_samples = "yes"`, the initial surrogates are constructed from the stored samples in `initial/`.
+New sample sets in the later MPSS iterations require the high-fidelity analyses.
+
+The notebooks in `verification/` use only the stored data (`initial/input_samples_zz.csv` and `initial/sample_1.csv`) and can be run without the high-fidelity solvers.
+They construct the DD-GPCE surrogates at the initial design from the 26 training samples and compare them with the independent high-fidelity samples.
+
+## Notes
+
+- The Simpack–Abaqus co-simulation model and the automation scripts used to run the high-fidelity analyses are not included.
+  The vehicle model is based on an example model supplied with Simpack and is therefore not redistributed.
+  Without the automation module, the code issues a warning on import and can be used with the stored samples only.
+- The design vector in the code has six entries; the last two are the means of the Young's modulus (70 GPa) and ultimate tensile strength (305 MPa), which are fixed by their bounds.
+  The optimization is therefore equivalent to the four-variable problem in the paper.
+- The local optimizations use differential evolution without a fixed random seed, so a rerun may follow a different sequence of designs.
+
+## Citation
+
+If you use this code, please cite the paper above (the full reference will be added upon publication).
