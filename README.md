@@ -2,7 +2,7 @@
 
 Code and high-fidelity data for the paper
 
-> T. Kwon, S. Hwang, C. Lee, D. Lee, *Reliability-based design optimization of a suspension lower control arm using MBD–FEM co-simulation* (submitted to *Structural and Multidisciplinary Optimization*).
+> T. Kwon, S. Hwang, C. Lee, D. Lee, *Reliability-based design optimization of a suspension lower control arm using MBD–FEM co-simulation*.
 
 The repository contains the implementation of the multi-point single-step (MPSS) method with dimensionally decomposed generalized polynomial chaos expansion (DD-GPCE) used in the paper, together with the high-fidelity responses obtained during the optimization.
 
